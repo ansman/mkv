@@ -1,6 +1,30 @@
 #!/usr/bin/env ruby
 
 require 'pp'
+require 'optparse'
+
+def get_options
+  options = {}
+  optparser = OptionParser.new do |opts|
+    opts.banner = 'Usage: mkv [options] files...'
+
+    msg = 'Whether to answer yes on the confirmation (good for scripting)'
+    opts.on('-y', '--yes', msg) do |y|
+      options[:yes] = y
+    end
+
+    opts.on('-d', '--dry-run', 'Show what would be done') do |d|
+      options[:dry_run] = d
+    end
+
+    opts.on_tail("-h", "--help", "Show this message") do
+      puts opts
+      exit
+    end
+  end
+  optparser.parse!
+  options
+end
 
 class NodeList < Array
   def [](key)
@@ -74,11 +98,13 @@ class MKVInfoParser
 end
 
 class MKVCleanup
-  def initialize(filename)
+  def initialize(filename, options)
     @filename = filename
+    @options = options
   end
 
   def clean
+    puts "Cleaning #{File.basename(@filename)}"
     parsed = get_parsed_metadata
     @tracks = parsed[:segment][:segment_tracks][:a_track]
     find_track_names
@@ -114,7 +140,7 @@ class MKVCleanup
   def track_language(track)
     return 'English' if not track.include? :language
     case track[:language].value
-    when /eng|und/ then 'English'
+    when /eng|und|zxx|^$/ then 'English'
     when 'spa' then 'Spanish'
     when 'swe' then 'Swedish'
     when 'dut' then 'Dutch'
@@ -134,6 +160,25 @@ class MKVCleanup
     when 'ind' then 'Indian'
     when 'rum' then 'Rumanian'
     when 'slv' then 'Slovenian'
+    when 'por' then 'Portugese'
+    when 'ita' then 'Italian'
+    when 'rus' then 'Russian'
+    when 'mac' then 'Macedonian'
+    when 'pol' then 'Polish'
+    when /scc|srp/ then 'Serbian'
+    when 'vie' then 'Vietnamese'
+    when 'est' then 'Estonian'
+    when 'slo' then 'Slovenian'
+    when 'heb' then 'Hebrew'
+    when 'mlt' then 'Maltese'
+    when 'kor' then 'Korean'
+    when 'tha' then 'Thai'
+    when 'ice' then 'Icelandic'
+    when 'scr' then 'Moldavian'
+    when 'rom' then 'Romanian'
+    when 'lit' then 'Lithuanian'
+    when 'lav' then 'Latvian'
+    when 'ukr' then 'Ukrainian'
     else
       abort("Unknown language #{track[:language].value}")
     end
@@ -153,16 +198,18 @@ class MKVCleanup
   end
 
   def confirm_rename
-    puts @filename
     puts "Title => #{title}"
     @track_names.each_with_index do |name, index|
       puts "Track #{index} (#{@tracks[index][:track_type].value}) => #{name}"
     end
 
-    if ARGV[1] != '--yes'
+    if @options[:dry_run]
+      return
+    elsif not @options[:yes]
       print "Is this correct? "
       if not STDIN.readline.chomp.downcase == 'y'
-        abort("Aborting")
+        puts "Aborting"
+        return
       end
     end
 
@@ -182,4 +229,9 @@ class MKVCleanup
   end
 end
 
-MKVCleanup.new(ARGV[0]).clean
+if __FILE__ == $0
+  options = get_options
+  ARGV.each do |filename|
+    MKVCleanup.new(filename, options).clean
+  end
+end
